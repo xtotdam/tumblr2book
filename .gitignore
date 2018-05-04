@@ -1,0 +1,7 @@
+/__pycache__/*
+
+/pictures/*
+*.tex
+*.txt
+
+/secret.py
