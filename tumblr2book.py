@@ -1,21 +1,26 @@
 #! /usr/bin/python3
 # -*- coding: utf-8 -*-
 
+import gevent
+from gevent import monkey
+monkey.patch_all()
+from gevent.pool import Pool, Timeout
+
+from functools import partial
 from math import ceil
-import pytumblr
-import sys
-import time
-from pprint import pprint
-import json
-import requests
-
-import html2text
-import html
-
+from pprint import pprint, pformat
 from string import Template
 
-import re
+import html
+import html2text
+import json
 import os
+import pytumblr
+import re
+import sys
+import time
+
+from urllib.request import urlopen
 
 pdirname = 'pictures'
 try:
@@ -45,6 +50,8 @@ d = '\n'.join(d)
 d = d.replace('\n\n', '\n\\\\\n').replace('\n', ' ')
 d = re.sub(r'\[(.*?)\]\((.*?)\)', r'\\href{\2}{\1}', d)
 
+print('** {} **\n\n{} posts\n{} pages'.format(blog_name, info['posts'], info['pages']))
+
 info['description'] = d
 info['pdirname'] = pdirname
 
@@ -65,51 +72,120 @@ templates = {
     'chat': Template(open('chat.tmpl').read()),
 }
 
-print()
+
+
+
+
+# info['pages'] = 100
+
+
+pool = Pool(3)
+pages_to_fetch = range(info['pages'])
+big_posts_dict = dict()
+pages_without_posts = list()
+ptf = []
+
+def fetch_posts_page(page):
+    print('Getting page #', page + 1, 'of', info['pages'], end='\r')
+    sys.stdout.flush()
+    try:
+        with Timeout(5):
+            response = client.posts(blog_name, offset=20 * page)
+            big_posts_dict[page] = response['posts']
+    except KeyError:
+        if 'errors' in response.keys():
+            ptf.append(page)
+        else:
+            print(page, response)
+            big_posts_dict[page] = []
+            pages_without_posts.append(page)
+    except Timeout:
+        ptf.append(page)
+
+while pages_to_fetch:
+    pool.map(fetch_posts_page, pages_to_fetch)
+    pages_to_fetch = ptf[:]
+    ptf = []
+    if pages_to_fetch:
+        print('\nReclaiming timeoutted pages')
+
+posts = list()
+for page in range(info['pages']):
+    posts += big_posts_dict[page]
+
+print('\n', len(posts), 'posts got')
+print(len(pages_without_posts), 'pages without posts:', sorted(pages_without_posts))
+
+
+
+
+
+pictures_links = list()
+for post in posts:
+    if post['type'] == 'photo':
+        for photo in post['photos']:
+            pictures_links.append(photo['original_size']['url'])
+
+print ('We will download', len(pictures_links), 'pics')
+
+ptf = list()
+
+def fetch_pic(url):
+    picname = os.path.basename(url).replace('_', '-')
+
+    if not os.path.exists(pdirname + os.sep + picname):
+        print('+', end='')
+        try:
+            with Timeout(15):
+                data = urlopen(url).read()
+                with open(pdirname + os.sep + picname, 'wb') as fp:
+                    fp.write(data)
+        except Timeout:
+            ptf.append(url)
+    else:
+        print('-', end='')
+
+while pictures_links:
+    pool.map(fetch_pic, pictures_links)
+    pictures_links = ptf[:]
+    ptf = []
+    if pictures_links:
+        print('\nReclaiming timeoutted pics')
+
+print ('\nGot \'em')
+
+
+
+
+
 with open('temp_posts.txt', 'w', encoding='utf8') as f:
+    for post in posts:
 
-    # for i in range(info['pages']):
-    for i in range(25):
+        if post['type'] == 'text':
+            post['body'] = html.unescape(post['body'])
+            if post['title']:
+                post['title'] = html.unescape(post['title'])
 
-        posts = client.posts(blog_name, offset=20 * i)['posts']
+        if post['type'] == 'quote':
+            post['text'] = html.unescape(post['text'])
+            post['source'] = html.unescape(post['source'])
 
-        for post in posts:
-            print(post['type'] + ' ', end='')
+        if post['type'] == 'chat':
+            post['body'] = post['body'].replace('\n', '\n\n')
 
-            if post['type'] == 'text':
-                post['body'] = html.unescape(post['body'])
-                if post['title']:
-                    post['title'] = html.unescape(post['title'])
+        if post['type'] == 'photo':
+            pp = ''
+            for photo in post['photos']:
+                purl = photo['original_size']['url']
+                pn = os.path.basename(purl).replace('_', '-')
 
-            if post['type'] == 'quote':
-                post['text'] = html.unescape(post['text'])
-                post['source'] = html.unescape(post['source'])
+                photo['picturename'] = pn
+                pp += templates['picture'].substitute(**photo)
 
-            if post['type'] == 'chat':
-                post['body'] = post['body'].replace('\n', '\n\n')
+            post['parsedphotos'] = pp
+            post['picscount'] = '{} picture'.format(len(post['photos']))
+            if len(post['photos']) > 1: post['picscount'] += 's'
 
-            if post['type'] == 'photo':
-                pp = ''
-                for photo in post['photos']:
-                    purl = photo['original_size']['url']
-                    pn = os.path.basename(purl).replace('_', '-')
+        f.write(templates[post['type']].substitute(**post))
 
-                    if not os.path.exists(pdirname + os.sep + pn):
-                        print('p', end='')
-                        r = requests.get(purl, timeout=(5, 20))
-                        if r.status_code == 200:
-                            with open(pdirname + os.sep + pn, 'wb') as fp:
-                                fp.write(r.content)
-                    else:
-                        print('s', end='')
 
-                    photo['picturename'] = pn
-                    pp += templates['picture'].substitute(**photo)
-
-                post['parsedphotos'] = pp
-                post['picscount'] = '{} picture'.format(len(post['photos']))
-                if len(post['photos']) > 1: post['picscount'] += 's'
-
-            f.write(templates[post['type']].substitute(**post))
-
-        print('page %d of %d ' % (i, info['pages']))
