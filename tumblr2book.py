@@ -10,6 +10,7 @@ import json
 import requests
 
 import html2text
+import html
 
 from string import Template
 
@@ -64,12 +65,25 @@ templates = {
     'chat': Template(open('chat.tmpl').read()),
 }
 
+print()
 with open('temp_posts.txt', 'w', encoding='utf8') as f:
 
     # for i in range(info['pages']):
     for i in range(25):
 
-        for post in client.posts(blog_name, offset=20 * i)['posts']:
+        posts = client.posts(blog_name, offset=20 * i)['posts']
+
+        for post in posts:
+            print(post['type'] + ' ', end='')
+
+            if post['type'] == 'text':
+                post['body'] = html.unescape(post['body'])
+                if post['title']:
+                    post['title'] = html.unescape(post['title'])
+
+            if post['type'] == 'quote':
+                post['text'] = html.unescape(post['text'])
+                post['source'] = html.unescape(post['source'])
 
             if post['type'] == 'chat':
                 post['body'] = post['body'].replace('\n', '\n\n')
@@ -81,10 +95,13 @@ with open('temp_posts.txt', 'w', encoding='utf8') as f:
                     pn = os.path.basename(purl).replace('_', '-')
 
                     if not os.path.exists(pdirname + os.sep + pn):
-                        r = requests.get(purl)
+                        print('p', end='')
+                        r = requests.get(purl, timeout=(5, 20))
                         if r.status_code == 200:
                             with open(pdirname + os.sep + pn, 'wb') as fp:
                                 fp.write(r.content)
+                    else:
+                        print('s', end='')
 
                     photo['picturename'] = pn
                     pp += templates['picture'].substitute(**photo)
@@ -95,4 +112,4 @@ with open('temp_posts.txt', 'w', encoding='utf8') as f:
 
             f.write(templates[post['type']].substitute(**post))
 
-        print('page %d of %d' % (i, info['pages']))
+        print('page %d of %d ' % (i, info['pages']))
