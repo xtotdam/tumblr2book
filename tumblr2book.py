@@ -8,10 +8,12 @@ from gevent.pool import Pool, Timeout
 
 from math import ceil
 from string import Template
+from functools import partial
 
 import os
 from ebooklib import epub
 import pytumblr
+import re
 import sys
 import shutil
 import time
@@ -21,11 +23,20 @@ from urllib.request import urlopen
 from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
+# IMPORTANT SWITCH
+download_images = True
+download_inline_images = True
+di_warning = '<p><b> No images are included! </b></p>' if not download_images else ''
+
 compress_images_too = True
 if shutil.which('7z') is None:
     compress_images_too = False
     print('I couldn\'t find 7z. You will put images into the book yourself.')
 
+
+# if len(sys.argv) < 3:
+#     print('Specify blog name!')
+#     exit()
 
 # blog_name = sys.argv[-1]
 blog_name = 'yourplayersaidwhat'
@@ -42,8 +53,9 @@ info['pdirname'] = info['name'] + '_pic_cache'
 pdirname = info['pdirname']
 try:
     os.mkdir(pdirname)
+    os.mkdir(pdirname + os.sep + 'inlines')
 except:
-    pass
+    print('Something happened while creating pic cache folder. Not necessary a problem.')
 
 print('** {} **\n\n{} posts\n{} pages'.format(info['name'], info['posts'], info['pages']))
 
@@ -61,25 +73,18 @@ introchapter.content = '''
 <p> {} posts </p>
 <p> Blog last updated {} </p>
 <p> Scraped {} </p>
-'''.format(info['title'], info['description'], info['posts'], info['updated'], time.ctime())
+{}
+'''.format(info['title'], info['description'], info['posts'], info['updated'], time.ctime(), di_warning)
 book.add_item(introchapter)
 
+template_names = [
+    'header', 'picture',
+    'text', 'quote', 'link', 'answer', 'video', 'audio', 'photo', 'chat']
 
-templates = {
-    'header': Template(open('header.tmpl').read()),
-    'picture': Template(open('picture.tmpl').read()),
+templates = {tn: Template(open(tn + '.tmpl').read()) for tn in template_names}
 
-    'text': Template(open('text.tmpl').read()),
-    'quote': Template(open('quote.tmpl').read()),
-    'link': Template(open('link.tmpl').read()),
-    'answer': Template(open('answer.tmpl').read()),
-    'video': Template(open('video.tmpl').read()),
-    'audio': Template(open('audio.tmpl').read()),
-    'photo': Template(open('photo.tmpl').read()),
-    'chat': Template(open('chat.tmpl').read()),
-}
 
-# info['pages'] = 1
+info['pages'] = 100
 # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Remove pages restriction')
 
 pool = Pool(5)
@@ -122,57 +127,58 @@ print(len(pages_without_posts), 'pages without posts:', sorted(pages_without_pos
 
 
 
+if download_images:
+    pictures_links = list()
+    for post in posts:
+        if post['type'] == 'photo':
+            for photo in post['photos']:
+                pictures_links.append(photo['original_size']['url'])
 
-pictures_links = list()
-for post in posts:
-    if post['type'] == 'photo':
-        for photo in post['photos']:
-            pictures_links.append(photo['original_size']['url'])
+    print ('We will download', len(pictures_links), 'pics')
 
-print ('We will download', len(pictures_links), 'pics')
+    ptf = list()
 
-ptf = list()
+    def fetch_pic(url, inline=False):
+        picname = os.path.basename(url)
+        if inline:
+            localpic = pdirname + os.sep + 'inlines' + os.sep + picname
+        else:
+            localpic = pdirname + os.sep + picname
 
-def fetch_pic(url):
-    picname = os.path.basename(url).replace('_', '-')
+        if not os.path.exists(localpic):
+            print('+', end='')
+            try:
+                with Timeout(15):
+                    data = urlopen(url).read()
+                    with open(localpic, 'wb') as fp:
+                        fp.write(data)
+            except Timeout:
+                ptf.append(url)
+        else:
+            print('-', end='')
+        sys.stdout.flush()
 
-    if not os.path.exists(pdirname + os.sep + picname):
-        print('+', end='')
-        try:
-            with Timeout(15):
-                data = urlopen(url).read()
-                with open(pdirname + os.sep + picname, 'wb') as fp:
-                    fp.write(data)
-        except Timeout:
-            ptf.append(url)
-    else:
-        print('-', end='')
+    while pictures_links:
+        pool.map(fetch_pic, pictures_links)
+        pictures_links = ptf[:]
+        ptf = []
+        if pictures_links:
+            print('\nReclaiming timeoutted pics')
 
-while pictures_links:
-    pool.map(fetch_pic, pictures_links)
-    pictures_links = ptf[:]
-    ptf = []
-    if pictures_links:
-        print('\nReclaiming timeoutted pics')
-
-print ('\nGot \'em')
-
-# does this even work?
-# for url in pictures_links:
-#     picname = os.path.basename(url).replace('_', '-')
-#     img = epub.EpubImage(
-#         file_name=pdirname + os.sep + picname,
-#         content=open(pdirname + os.sep + picname, 'rb').read())
-#     book.add_item(img)
+    print ('\nGot \'em')
 
 
 
 
-chapter_size = 200
+
+
+chapter_size = 2000
 
 chapter = ''
 chapter_num = 0
 real_posts_count = len(posts)
+pics_to_download = list()
+inline_pic_pattern = re.compile(r'<img.*?src="(.*?)".*?\/>')
 
 posts += [{'type':'pass'}] * (chapter_size - (len(posts) % chapter_size) + 1)
 ids_for_spine = list()
@@ -183,7 +189,7 @@ for i, post in enumerate(posts):
         pp = ''
         for photo in post['photos']:
             purl = photo['original_size']['url']
-            pn = os.path.basename(purl).replace('_', '-')
+            pn = os.path.basename(purl)
 
             photo['picturename'] = pn
             photo['pdirname'] = pdirname
@@ -196,6 +202,16 @@ for i, post in enumerate(posts):
     if post['type'] == 'answer':
         if post['summary'] is None:
             post['summary'] = 'There was no title'
+        if '<img' in post['answer']:
+            for url in inline_pic_pattern.findall(post['answer']):
+                pics_to_download.append(url)
+                post['answer'] = post['answer'].replace(url, 'images/inlines/' + os.path.basename(url))
+
+    if post['type'] == 'text':
+        if '<img' in post['body']:
+            for url in inline_pic_pattern.findall(post['body']):
+                pics_to_download.append(url)
+                post['body'] = post['body'].replace(url, 'images/inlines/' + os.path.basename(url))
 
     if not post['type'] == 'pass':
         post['postnumber'] = str(i + 1)
@@ -215,6 +231,31 @@ for i, post in enumerate(posts):
         chapter = ''
         chapter_num += 1
 
+
+
+
+
+
+if download_inline_images:
+    fetch_inline_pic = partial(fetch_pic, inline=True)
+
+    print ('We will download', len(pics_to_download), 'inline pics')
+
+    ptf = list()
+
+    while pics_to_download:
+        pool.map(fetch_inline_pic, pics_to_download)
+        pics_to_download = ptf[:]
+        ptf = []
+        if pics_to_download:
+            print('\nReclaiming timeoutted pics')
+
+    print ('\nGot \'em')
+
+
+
+
+
 book.toc = (epub.Link('intro.xhtml', 'Introduction', 'intro'), )
 book.toc += tuple(epub.Link(
     'chap_{:04d}.xhtml'.format(n),
@@ -223,10 +264,12 @@ book.toc += tuple(epub.Link(
 
 last_chap_link = book.toc[-1]
 book.toc = book.toc[:-1]
-book.toc += (epub.Link(
-    last_chap_link.href,
-    '{} - {}'.format(last_chap_link.title.split(' ')[0], real_posts_count),
-    last_chap_link.uid), )
+
+if int(last_chap_link.title.split(' ')[0]) - 1 != real_posts_count:
+    book.toc += (epub.Link(
+        last_chap_link.href,
+        '{} - {}'.format(last_chap_link.title.split(' ')[0], real_posts_count),
+        last_chap_link.uid), )
 
 book.spine = ['nav', introchapter.id] + ids_for_spine
 
@@ -243,6 +286,7 @@ if compress_images_too:
     shutil.copytree(pdirname, 'EPUB/images')
     os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
     shutil.rmtree('EPUB')
-    shutil.move(bookname + '.tmp', bookname)
+    if os.path.exists(bookname + '.tmp'):
+        shutil.move(bookname + '.tmp', bookname)
 else:
     print('Rename {} into images/ and put it into {}/EPUB/images. I warned you:)'.format(pdirname, bookname))

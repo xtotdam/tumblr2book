@@ -13,3 +13,8 @@
 *.out
 *.pdf
 *.epub
+
+/EPUB/*
+*.tmp
+
+*_cache/*
