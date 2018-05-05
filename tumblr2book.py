@@ -6,29 +6,17 @@ from gevent import monkey
 monkey.patch_all()
 from gevent.pool import Pool, Timeout
 
-from functools import partial
 from math import ceil
-from pprint import pprint, pformat
 from string import Template
 
-import html
-import html2text
-import json
 import os
 from ebooklib import epub
 import pytumblr
-import re
 import sys
+import shutil
 import time
 
 from urllib.request import urlopen
-
-pdirname = 'pictures'
-try:
-    os.mkdir(pdirname)
-except:
-    pass
-
 
 from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
@@ -44,9 +32,15 @@ info['title'] = info['title'].strip()
 info['updated'] = time.ctime(int(info['updated']))
 info['pages'] = int(ceil(info['posts'] / 20.))
 
-info['pdirname'] = pdirname
+info['pdirname'] = info['name'] + '_pic_cache'
 
-print('** {} **\n\n{} posts\n{} pages'.format(blog_name, info['posts'], info['pages']))
+pdirname = info['pdirname']
+try:
+    os.mkdir(pdirname)
+except:
+    pass
+
+print('** {} **\n\n{} posts\n{} pages'.format(info['name'], info['posts'], info['pages']))
 
 
 book = epub.EpubBook()
@@ -80,7 +74,8 @@ templates = {
     'chat': Template(open('chat.tmpl').read()),
 }
 
-# info['pages'] = 25
+# info['pages'] = 1
+# print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Remove pages restriction')
 
 pool = Pool(5)
 pages_to_fetch = range(info['pages'])
@@ -166,10 +161,11 @@ for url in pictures_links:
 
 
 
-chapter_size = 500
+chapter_size = 200
 
 chapter = ''
 chapter_num = 0
+real_posts_count = len(posts)
 
 posts += [{'type':'pass'}] * (chapter_size - (len(posts) % chapter_size) + 1)
 ids_for_spine = list()
@@ -183,13 +179,21 @@ for i, post in enumerate(posts):
             pn = os.path.basename(purl).replace('_', '-')
 
             photo['picturename'] = pn
+            photo['pdirname'] = pdirname
             pp += templates['picture'].substitute(**photo)
 
         post['parsedphotos'] = pp
         post['picscount'] = '{} picture'.format(len(post['photos']))
         if len(post['photos']) > 1: post['picscount'] += 's'
 
+    if post['type'] == 'answer':
+        if post['summary'] is None:
+            post['summary'] = 'There was no title'
+
     if not post['type'] == 'pass':
+        post['postnumber'] = str(i + 1)
+        if 'title' in post.keys() and post['title'] is None:
+            post['title'] = 'There was no title'
         post['header'] = templates['header'].substitute(**post)
         processed_post = templates[post['type']].substitute(**post)
 
@@ -210,9 +214,17 @@ book.toc += tuple(epub.Link(
     '{} - {}'.format(n * chapter_size + 1, (n + 1) * chapter_size),
     str(n)) for n in range(len(posts) // chapter_size))
 
-book.spine = ['nav', 'intro'] + ids_for_spine
+last_chap_link = book.toc[-1]
+book.toc = book.toc[:-1]
+book.toc += (epub.Link(
+    last_chap_link.href,
+    '{} - {}'.format(last_chap_link.title.split(' ')[0], real_posts_count),
+    last_chap_link.uid), )
+
+book.spine = ['nav', introchapter.id] + ids_for_spine
 
 book.add_item(epub.EpubNcx())
 book.add_item(epub.EpubNav())
 
-epub.write_epub('test.epub', book, {})
+bookname = info['name'] + '.epub'
+epub.write_epub(bookname, book, {})
