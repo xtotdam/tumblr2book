@@ -21,8 +21,13 @@ from urllib.request import urlopen
 from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
+compress_images_too = True
+if shutil.which('7z') is None:
+    compress_images_too = False
+    print('I couldn\'t find 7z. You will put images into the book yourself.')
 
-# blog = sys.argv[-1]
+
+# blog_name = sys.argv[-1]
 blog_name = 'yourplayersaidwhat'
 
 blog_info = client.blog_info(blog_name)
@@ -153,10 +158,12 @@ while pictures_links:
 print ('\nGot \'em')
 
 # does this even work?
-for url in pictures_links:
-    picname = os.path.basename(url).replace('_', '-')
-    img = epub.EpubImage(filename='images/' + picname, content=pdirname + os.sep + picname)
-    book.add_item(img)
+# for url in pictures_links:
+#     picname = os.path.basename(url).replace('_', '-')
+#     img = epub.EpubImage(
+#         file_name=pdirname + os.sep + picname,
+#         content=open(pdirname + os.sep + picname, 'rb').read())
+#     book.add_item(img)
 
 
 
@@ -228,3 +235,14 @@ book.add_item(epub.EpubNav())
 
 bookname = info['name'] + '.epub'
 epub.write_epub(bookname, book, {})
+
+
+if compress_images_too:
+    # dirty hack
+    os.mkdir('EPUB')
+    shutil.copytree(pdirname, 'EPUB/images')
+    os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
+    shutil.rmtree('EPUB')
+    shutil.move(bookname + '.tmp', bookname)
+else:
+    print('Rename {} into images/ and put it into {}/EPUB/images. I warned you:)'.format(pdirname, bookname))
