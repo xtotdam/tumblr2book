@@ -15,6 +15,7 @@ import html
 import html2text
 import json
 import os
+from ebooklib import epub
 import pytumblr
 import re
 import sys
@@ -43,24 +44,32 @@ info['title'] = info['title'].strip()
 info['updated'] = time.ctime(int(info['updated']))
 info['pages'] = int(ceil(info['posts'] / 20.))
 
-d = html2text.html2text(info['description'])
-d = (s.strip() for s in d.split('\n'))
-d = (s if s else '\n' for s in d)
-d = '\n'.join(d)
-d = d.replace('\n\n', '\n\\\\\n').replace('\n', ' ')
-d = re.sub(r'\[(.*?)\]\((.*?)\)', r'\\href{\2}{\1}', d)
+info['pdirname'] = pdirname
 
 print('** {} **\n\n{} posts\n{} pages'.format(blog_name, info['posts'], info['pages']))
 
-info['description'] = d
-info['pdirname'] = pdirname
 
-with open('main.tex', 'w', encoding='utf8') as f:
-    maindoc = Template(open('book.tmpl').read())
-    f.write(maindoc.substitute(**info))
+book = epub.EpubBook()
+book.set_title(info['title'])
+book.add_author(info['title'])
+book.add_author('Tumblr2book')
+book.set_language('en')
+
+introchapter = epub.EpubHtml(file_name='intro.xhtml')
+introchapter.content = '''
+<h1> {} </h1>
+<p> {} </p>
+<p> {} posts </p>
+<p> Blog last updated {} </p>
+<p> Scraped {} </p>
+'''.format(info['title'], info['description'], info['posts'], info['updated'], time.ctime())
+book.add_item(introchapter)
 
 
 templates = {
+    'header': Template(open('header.tmpl').read()),
+    'picture': Template(open('picture.tmpl').read()),
+
     'text': Template(open('text.tmpl').read()),
     'quote': Template(open('quote.tmpl').read()),
     'link': Template(open('link.tmpl').read()),
@@ -68,18 +77,12 @@ templates = {
     'video': Template(open('video.tmpl').read()),
     'audio': Template(open('audio.tmpl').read()),
     'photo': Template(open('photo.tmpl').read()),
-    'picture': Template(open('picture.tmpl').read()),
     'chat': Template(open('chat.tmpl').read()),
 }
 
+# info['pages'] = 25
 
-
-
-
-# info['pages'] = 100
-
-
-pool = Pool(3)
+pool = Pool(5)
 pages_to_fetch = range(info['pages'])
 big_posts_dict = dict()
 pages_without_posts = list()
@@ -107,7 +110,7 @@ while pages_to_fetch:
     pages_to_fetch = ptf[:]
     ptf = []
     if pages_to_fetch:
-        print('\nReclaiming timeoutted pages')
+        print('\nReclaiming ' + str(len(pages_to_fetch)) + ' timeoutted pages')
 
 posts = list()
 for page in range(info['pages']):
@@ -154,38 +157,62 @@ while pictures_links:
 
 print ('\nGot \'em')
 
+# does this even work?
+for url in pictures_links:
+    picname = os.path.basename(url).replace('_', '-')
+    img = epub.EpubImage(filename='images/' + picname, content=pdirname + os.sep + picname)
+    book.add_item(img)
 
 
 
 
-with open('temp_posts.txt', 'w', encoding='utf8') as f:
-    for post in posts:
+chapter_size = 500
 
-        if post['type'] == 'text':
-            post['body'] = html.unescape(post['body'])
-            if post['title']:
-                post['title'] = html.unescape(post['title'])
+chapter = ''
+chapter_num = 0
 
-        if post['type'] == 'quote':
-            post['text'] = html.unescape(post['text'])
-            post['source'] = html.unescape(post['source'])
+posts += [{'type':'pass'}] * (chapter_size - (len(posts) % chapter_size) + 1)
+ids_for_spine = list()
 
-        if post['type'] == 'chat':
-            post['body'] = post['body'].replace('\n', '\n\n')
+for i, post in enumerate(posts):
 
-        if post['type'] == 'photo':
-            pp = ''
-            for photo in post['photos']:
-                purl = photo['original_size']['url']
-                pn = os.path.basename(purl).replace('_', '-')
+    if post['type'] == 'photo':
+        pp = ''
+        for photo in post['photos']:
+            purl = photo['original_size']['url']
+            pn = os.path.basename(purl).replace('_', '-')
 
-                photo['picturename'] = pn
-                pp += templates['picture'].substitute(**photo)
+            photo['picturename'] = pn
+            pp += templates['picture'].substitute(**photo)
 
-            post['parsedphotos'] = pp
-            post['picscount'] = '{} picture'.format(len(post['photos']))
-            if len(post['photos']) > 1: post['picscount'] += 's'
+        post['parsedphotos'] = pp
+        post['picscount'] = '{} picture'.format(len(post['photos']))
+        if len(post['photos']) > 1: post['picscount'] += 's'
 
-        f.write(templates[post['type']].substitute(**post))
+    if not post['type'] == 'pass':
+        post['header'] = templates['header'].substitute(**post)
+        processed_post = templates[post['type']].substitute(**post)
 
+        chapter += processed_post
 
+    if not (i + 1) % chapter_size:
+        c = epub.EpubHtml(file_name='chap_{:04d}.xhtml'.format(chapter_num))
+        c.content = chapter
+        book.add_item(c)
+        ids_for_spine.append(c.id)
+
+        chapter = ''
+        chapter_num += 1
+
+book.toc = (epub.Link('intro.xhtml', 'Introduction', 'intro'), )
+book.toc += tuple(epub.Link(
+    'chap_{:04d}.xhtml'.format(n),
+    '{} - {}'.format(n * chapter_size + 1, (n + 1) * chapter_size),
+    str(n)) for n in range(len(posts) // chapter_size))
+
+book.spine = ['nav', 'intro'] + ids_for_spine
+
+book.add_item(epub.EpubNcx())
+book.add_item(epub.EpubNav())
+
+epub.write_epub('test.epub', book, {})
