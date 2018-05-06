@@ -6,16 +6,17 @@ from gevent import monkey
 monkey.patch_all()
 from gevent.pool import Pool, Timeout
 
+from ebooklib import epub
+from functools import partial
 from math import ceil
 from string import Template
-from functools import partial
 
+import argparse
 import os
-from ebooklib import epub
 import pytumblr
 import re
-import sys
 import shutil
+import sys
 import time
 
 from urllib.request import urlopen
@@ -23,9 +24,19 @@ from urllib.request import urlopen
 from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
-# IMPORTANT SWITCH
-download_images = True
-download_inline_images = True
+parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we download photo posts and don\'t download inline images')
+parser.add_argument('-n', action='store_false', help='do not download photos')
+parser.add_argument('-i', action='store_true', help='download inline photos')
+parser.add_argument('blog_name', metavar='BLOG_NAME', help='tumblr blog name - what is before \'.tumblr.com\'')
+args = parser.parse_args()
+
+download_images = args.n
+download_inline_images = args.i
+
+if not download_images:
+    download_inline_images = False
+
+di_warning = '<p><b> Inline images are included! </b></p>' if not download_inline_images else ''
 di_warning = '<p><b> No images are included! </b></p>' if not download_images else ''
 
 compress_images_too = True
@@ -34,14 +45,13 @@ if shutil.which('7z') is None:
     print('I couldn\'t find 7z. You will put images into the book yourself.')
 
 
-# if len(sys.argv) < 3:
-#     print('Specify blog name!')
-#     exit()
-
-# blog_name = sys.argv[-1]
-blog_name = 'yourplayersaidwhat'
-
+blog_name = args.blog_name
 blog_info = client.blog_info(blog_name)
+
+print('{status} {msg}'.format(**blog_info['meta']))
+if blog_info['meta']['status'] == 404:
+    exit()
+
 info = blog_info['blog']
 
 info['title'] = info['title'].strip()
@@ -84,8 +94,6 @@ template_names = [
 templates = {tn: Template(open(tn + '.tmpl').read()) for tn in template_names}
 
 
-info['pages'] = 100
-# print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Remove pages restriction')
 
 pool = Pool(5)
 pages_to_fetch = range(info['pages'])
@@ -154,6 +162,8 @@ if download_images:
                         fp.write(data)
             except Timeout:
                 ptf.append(url)
+            except:
+                pass
         else:
             print('-', end='')
         sys.stdout.flush()
@@ -172,7 +182,7 @@ if download_images:
 
 
 
-chapter_size = 2000
+chapter_size = 200
 
 chapter = ''
 chapter_num = 0
@@ -191,8 +201,11 @@ for i, post in enumerate(posts):
             purl = photo['original_size']['url']
             pn = os.path.basename(purl)
 
-            photo['picturename'] = pn
             photo['pdirname'] = pdirname
+            if download_images:
+                photo['src'] = 'images/' + pn
+            else:
+                photo['src'] = purl
             pp += templates['picture'].substitute(**photo)
 
         post['parsedphotos'] = pp
@@ -202,16 +215,18 @@ for i, post in enumerate(posts):
     if post['type'] == 'answer':
         if post['summary'] is None:
             post['summary'] = 'There was no title'
-        if '<img' in post['answer']:
-            for url in inline_pic_pattern.findall(post['answer']):
-                pics_to_download.append(url)
-                post['answer'] = post['answer'].replace(url, 'images/inlines/' + os.path.basename(url))
+        if download_inline_images:
+            if '<img' in post['answer']:
+                for url in inline_pic_pattern.findall(post['answer']):
+                    pics_to_download.append(url)
+                    post['answer'] = post['answer'].replace(url, 'images/inlines/' + os.path.basename(url))
 
     if post['type'] == 'text':
-        if '<img' in post['body']:
-            for url in inline_pic_pattern.findall(post['body']):
-                pics_to_download.append(url)
-                post['body'] = post['body'].replace(url, 'images/inlines/' + os.path.basename(url))
+        if download_inline_images:
+            if '<img' in post['body']:
+                for url in inline_pic_pattern.findall(post['body']):
+                    pics_to_download.append(url)
+                    post['body'] = post['body'].replace(url, 'images/inlines/' + os.path.basename(url))
 
     if not post['type'] == 'pass':
         post['postnumber'] = str(i + 1)
