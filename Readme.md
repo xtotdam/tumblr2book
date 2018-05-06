@@ -22,11 +22,11 @@ usage: tumblr2book.py [-h] [-p] [-i] [-r] BLOG_NAME
 Assemble Tumblr blog into epub book. By default we don't download any images.
 
 positional arguments:
-  BLOG_NAME   tumblr blog name - what is before '.tumblr.com'
+  BLOG_NAME   Tumblr blog name - what is before '.tumblr.com'
 
 optional arguments:
   -h, --help  show this help message and exit
   -p          download photos
   -i          download inline photos. Will not work without -p
-  -r          reverse order of posts. Default is from new to old.
+  -r          reverse order of posts. Default is from new to old (like Tumblr itself)
 ```

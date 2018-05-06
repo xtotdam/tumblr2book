@@ -27,8 +27,8 @@ client = pytumblr.TumblrRestClient(tumblr_api_key)
 parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we don\'t download any images.')
 parser.add_argument('-p', action='store_true', help='download photos')
 parser.add_argument('-i', action='store_true', help='download inline photos. Will not work without -p')
-parser.add_argument('-r', action='store_true', help='reverse order of posts. Default is from new to old.')
-parser.add_argument('blog_name', metavar='BLOG_NAME', help='tumblr blog name - what is before \'.tumblr.com\'')
+parser.add_argument('-r', action='store_true', help='reverse order of posts. Default is from new to old (like Tumblr itself)')
+parser.add_argument('blog_name', metavar='BLOG_NAME', help='Tumblr blog name - what is before \'.tumblr.com\'')
 args = parser.parse_args()
 
 download_images = args.p
@@ -221,11 +221,15 @@ for i, post in enumerate(posts):
                 photo['src'] = 'images/' + pn
             else:
                 photo['src'] = purl
+            photo['originalsrc'] = purl
             pp += templates['picture'].substitute(**photo)
 
         post['parsedphotos'] = pp
-        post['picscount'] = '{} picture'.format(len(post['photos']))
-        if len(post['photos']) > 1: post['picscount'] += 's'
+        post['title'] = None
+        post['addinfo'] = '&mdash; {} picture'.format(len(post['photos']))
+        if len(post['photos']) > 1: post['addinfo'] += 's'
+    else:
+        post['addinfo'] = ''
 
     if post['type'] == 'chat':
         dialogue = ''
@@ -234,8 +238,7 @@ for i, post in enumerate(posts):
         post['body'] = dialogue
 
     if post['type'] == 'answer':
-        if post['summary'] is None:
-            post['summary'] = 'Answer post'
+        post['title'] = post['summary']
         if download_inline_images:
             if '<img' in post['answer']:
                 for url in inline_pic_pattern.findall(post['answer']):
@@ -249,10 +252,13 @@ for i, post in enumerate(posts):
                     pics_to_download.append(url)
                     post['body'] = post['body'].replace(url, 'images/inlines/' + os.path.basename(url))
 
+    if post['type'] == 'quote':
+        post['title'] = None
+
     if not post['type'] == 'pass':
         post['postnumber'] = str(i + 1)
         if 'title' in post.keys() and post['title'] is None:
-            post['title'] = '{} post'.format(post['type'].capitalize())
+            post['title'] = ''
         post['header'] = templates['header'].substitute(**post)
         processed_post = templates[post['type']].substitute(**post)
 
