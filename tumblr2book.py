@@ -242,7 +242,7 @@ for i, post in enumerate(posts):
             pn = os.path.basename(purl)
 
             if download_images:
-                photo['src'] = 'images/' + pn
+                photo['src'] = '../' + pdirname + '/' + pn
             else:
                 photo['src'] = purl
             photo['originalsrc'] = purl
@@ -265,14 +265,14 @@ for i, post in enumerate(posts):
             if '<img' in post['answer']:
                 for url in inline_pic_pattern.findall(post['answer']):
                     pics_to_download.append(url)
-                    post['answer'] = post['answer'].replace(url, 'images/inlines/' + os.path.basename(url))
+                    post['answer'] = post['answer'].replace(url, '../' + pdirname + '/inlines/' + os.path.basename(url))
 
     if post['type'] == 'text':
         if download_inline_images:
             if '<img' in post['body']:
                 for url in inline_pic_pattern.findall(post['body']):
                     pics_to_download.append(url)
-                    post['body'] = post['body'].replace(url, 'images/inlines/' + os.path.basename(url))
+                    post['body'] = post['body'].replace(url, '../' + pdirname + '/inlines/' + os.path.basename(url))
 
     if post['type'] == 'quote':
         post['title'] = None
@@ -351,16 +351,10 @@ epub.write_epub(bookname, book, {})
 # a bit time because it is needed here
 time.sleep(2)
 
-# a dirty hack
+# a dirty hack since I didn't manage to add images using ebooklib:)
 if download_images or download_inline_images:
     if compress_images_too:
-        if os.path.exists('EPUB'):
-            print('Removing old EPUB folder')
-            shutil.rmtree('EPUB', ignore_errors=True)
-        os.mkdir('EPUB')
-        shutil.copytree(pdirname, 'EPUB/images')
-        os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
-        shutil.rmtree('EPUB', ignore_errors=True)
+        os.system('7z a -tzip {0} {1}/*'''.format(bookname, pdirname))
         if os.path.exists(bookname + '.tmp'):
             shutil.move(bookname + '.tmp', bookname)
     else:
