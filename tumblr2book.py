@@ -24,13 +24,13 @@ from urllib.request import urlopen
 from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
-parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we download photo posts and don\'t download inline images')
-parser.add_argument('-n', action='store_false', help='do not download photos')
+parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we don\'t download any images.')
+parser.add_argument('-p', action='store_false', help='download photos')
 parser.add_argument('-i', action='store_true', help='download inline photos')
 parser.add_argument('blog_name', metavar='BLOG_NAME', help='tumblr blog name - what is before \'.tumblr.com\'')
 args = parser.parse_args()
 
-download_images = args.n
+download_images = args.p
 download_inline_images = args.i
 
 if not download_images:
