@@ -39,9 +39,9 @@ if not download_images:
     download_inline_images = False
 
 if not download_images:
-    di_warning = '<p><b> No images are included! </b></p>'
+    di_warning = '<p><b> No images are bundled! </b></p>'
 elif not download_inline_images:
-    di_warning = '<p><b> No inline images are included! </b></p>'
+    di_warning = '<p><b> No inline images are bundled! </b></p>'
 else:
     di_warning = ''
 
@@ -107,7 +107,7 @@ templates = {tn: Template(open('templates' + os.sep + tn + '.tmpl').read()) for 
 
 
 
-pool = Pool(5)
+pool = Pool(4)
 pages_to_fetch = range(info['pages'])
 big_posts_dict = dict()
 pages_without_posts = list()
@@ -135,14 +135,13 @@ while pages_to_fetch:
     pages_to_fetch = ptf[:]
     ptf = []
     if pages_to_fetch:
-        print('\nReclaiming ' + str(len(pages_to_fetch)) + ' timeoutted pages')
+        print('\nClaiming ' + str(len(pages_to_fetch)) + ' timeoutted pages again')
 
 posts = list()
 for page in range(info['pages']):
     posts += big_posts_dict[page]
 
 print('\n', len(posts), 'posts got')
-print(len(pages_without_posts), 'pages without posts:', sorted(pages_without_posts))
 
 
 
@@ -180,12 +179,13 @@ if download_images:
             print('-', end='')
         sys.stdout.flush()
 
+    pool = Pool(20)
     while pictures_links:
         pool.map(fetch_pic, pictures_links)
         pictures_links = ptf[:]
         ptf = []
         if pictures_links:
-            print('\nReclaiming timeoutted pics')
+            print('\nClaiming' + str(len(pictures_links)) + 'timeoutted pics again')
 
     print ('\nGot \'em')
 
@@ -284,7 +284,7 @@ if download_inline_images:
         pics_to_download = ptf[:]
         ptf = []
         if pics_to_download:
-            print('\nReclaiming timeoutted pics')
+            print('\nClaiming' + str(len(pics_to_download)) + 'timeoutted pics again')
 
     print ('\nGot \'em')
 
