@@ -92,7 +92,7 @@ template_names = [
     'header', 'picture',
     'text', 'quote', 'link', 'answer', 'video', 'audio', 'photo', 'chat']
 
-templates = {tn: Template(open(tn + '.tmpl').read()) for tn in template_names}
+templates = {tn: Template(open('templates' + os.sep + tn + '.tmpl').read()) for tn in template_names}
 
 
 
