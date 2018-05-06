@@ -1,20 +1,8 @@
 /__pycache__/*
 
-/pictures/*
-*.tex
-*.txt
-
 /secret.py
 
-*.aux
-*.fdb_latexmk
-*.fls
-*.log
-*.out
-*.pdf
-*.epub
-
-/EPUB/*
 *.tmp
+*.epub
 
 *_cache/*
