@@ -2,6 +2,8 @@
 
 Nifty tool to get your favorite tumblr blog with you. It downloads it whole and puts it into epub book.
 
+Don't forget to put your API key into `secret.py` into `tumblr_api_key` variable.
+
 ### Requirements
 
 ```
