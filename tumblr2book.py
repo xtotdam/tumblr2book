@@ -40,9 +40,10 @@ di_warning = '<p><b> Inline images are included! </b></p>' if not download_inlin
 di_warning = '<p><b> No images are included! </b></p>' if not download_images else ''
 
 compress_images_too = True
-if shutil.which('7z') is None:
-    compress_images_too = False
-    print('I couldn\'t find 7z. You will put images into the book yourself.')
+if download_images or download_inline_images:
+    if shutil.which('7z') is None:
+        compress_images_too = False
+        print('I couldn\'t find 7z. You will put images into the book yourself.')
 
 
 blog_name = args.blog_name
@@ -295,13 +296,15 @@ bookname = info['name'] + '.epub'
 epub.write_epub(bookname, book, {})
 
 
-if compress_images_too:
-    # dirty hack
-    os.mkdir('EPUB')
-    shutil.copytree(pdirname, 'EPUB/images')
-    os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
-    shutil.rmtree('EPUB')
-    if os.path.exists(bookname + '.tmp'):
-        shutil.move(bookname + '.tmp', bookname)
-else:
-    print('Rename {} into images/ and put it into {}/EPUB/images. I warned you:)'.format(pdirname, bookname))
+
+if download_images or download_inline_images:
+    if compress_images_too:
+        # dirty hack
+        os.mkdir('EPUB')
+        shutil.copytree(pdirname, 'EPUB/images')
+        os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
+        shutil.rmtree('EPUB')
+        if os.path.exists(bookname + '.tmp'):
+            shutil.move(bookname + '.tmp', bookname)
+    else:
+        print('Rename {} into images/ and put it into {}/EPUB/images. I warned you:)'.format(pdirname, bookname))
