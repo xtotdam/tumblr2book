@@ -1,6 +1,6 @@
 # Tumblr2Book
 
-Nifty tool to get your favorite tumblr blog with you. It downloads it whole and puts it into epub book.
+A nifty tool that lets you read your favorite tumblr blog offline.  It downloads all the posts and puts them into an epub book you can enjoy everywhere.
 
 Don't forget to put your API key into `secret.py` into `tumblr_api_key` variable.
 
@@ -29,3 +29,8 @@ optional arguments:
   -p          download photos
   -i          download inline photos
 ```
+
+### TODO
+
+- [ ] pickling
+- [ ] inverting posts' order

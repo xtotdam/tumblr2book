@@ -25,7 +25,7 @@ from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
 parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we don\'t download any images.')
-parser.add_argument('-p', action='store_false', help='download photos')
+parser.add_argument('-p', action='store_true', help='download photos')
 parser.add_argument('-i', action='store_true', help='download inline photos')
 parser.add_argument('blog_name', metavar='BLOG_NAME', help='tumblr blog name - what is before \'.tumblr.com\'')
 args = parser.parse_args()
@@ -83,12 +83,13 @@ book.set_language('en')
 introchapter = epub.EpubHtml(file_name='intro.xhtml')
 introchapter.content = '''
 <h1> {} </h1>
+<p> <a href="{}"> {} </a> </p>
 <p> {} </p>
 <p> {} posts </p>
 <p> Blog last updated {} </p>
 <p> Scraped {} </p>
 {}
-'''.format(info['title'], info['description'], info['posts'], info['updated'], time.ctime(), di_warning)
+'''.format(info['title'], info['url'], info['url'], info['description'], info['posts'], info['updated'], time.ctime(), di_warning)
 book.add_item(introchapter)
 
 template_names = [
@@ -218,7 +219,7 @@ for i, post in enumerate(posts):
 
     if post['type'] == 'answer':
         if post['summary'] is None:
-            post['summary'] = 'There was no title'
+            post['summary'] = '&mdash;'
         if download_inline_images:
             if '<img' in post['answer']:
                 for url in inline_pic_pattern.findall(post['answer']):
@@ -235,7 +236,7 @@ for i, post in enumerate(posts):
     if not post['type'] == 'pass':
         post['postnumber'] = str(i + 1)
         if 'title' in post.keys() and post['title'] is None:
-            post['title'] = 'There was no title'
+            post['title'] = '&mdash;'
         post['header'] = templates['header'].substitute(**post)
         processed_post = templates[post['type']].substitute(**post)
 
