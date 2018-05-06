@@ -49,9 +49,12 @@ if download_images or download_inline_images:
 blog_name = args.blog_name
 blog_info = client.blog_info(blog_name)
 
-print('{status} {msg}'.format(**blog_info['meta']))
-if blog_info['meta']['status'] == 404:
-    exit()
+try:
+    print('{status} {msg}'.format(**blog_info['meta']))
+    if blog_info['meta']['status'] == 404:
+        exit()
+except KeyError:
+    pass
 
 info = blog_info['blog']
 
