@@ -17,7 +17,7 @@ also [7-zip](https://7-zip.org)
 ### Usage
 
 ```
-usage: tumblr2book.py [-h] [-p] [-i] BLOG_NAME
+usage: tumblr2book.py [-h] [-p] [-i] [-r] BLOG_NAME
 
 Assemble Tumblr blog into epub book. By default we don't download any images.
 
@@ -27,10 +27,6 @@ positional arguments:
 optional arguments:
   -h, --help  show this help message and exit
   -p          download photos
-  -i          download inline photos
+  -i          download inline photos. Will not work without -p
+  -r          reverse order of posts. Default is from new to old.
 ```
-
-### TODO
-
-- [ ] pickling
-- [ ] inverting posts' order

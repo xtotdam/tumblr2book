@@ -26,18 +26,25 @@ client = pytumblr.TumblrRestClient(tumblr_api_key)
 
 parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we don\'t download any images.')
 parser.add_argument('-p', action='store_true', help='download photos')
-parser.add_argument('-i', action='store_true', help='download inline photos')
+parser.add_argument('-i', action='store_true', help='download inline photos. Will not work without -p')
+parser.add_argument('-r', action='store_true', help='reverse order of posts. Default is from new to old.')
 parser.add_argument('blog_name', metavar='BLOG_NAME', help='tumblr blog name - what is before \'.tumblr.com\'')
 args = parser.parse_args()
 
 download_images = args.p
 download_inline_images = args.i
+reverse_posts = args.r
 
 if not download_images:
     download_inline_images = False
 
-di_warning = '<p><b> Inline images are included! </b></p>' if not download_inline_images else ''
-di_warning = '<p><b> No images are included! </b></p>' if not download_images else ''
+if not download_images:
+    di_warning = '<p><b> No images are included! </b></p>'
+elif not download_inline_images:
+    di_warning = '<p><b> No inline images are included! </b></p>'
+else:
+    di_warning = ''
+
 
 compress_images_too = True
 if download_images or download_inline_images:
@@ -51,7 +58,7 @@ blog_info = client.blog_info(blog_name)
 
 try:
     print('{status} {msg}'.format(**blog_info['meta']))
-    if blog_info['meta']['status'] == 404:
+    if blog_info['meta']['status'] in (401, 404):
         exit()
 except KeyError:
     pass
@@ -93,7 +100,7 @@ introchapter.content = '''
 book.add_item(introchapter)
 
 template_names = [
-    'header', 'picture',
+    'header', 'picture', 'chatphrase',
     'text', 'quote', 'link', 'answer', 'video', 'audio', 'photo', 'chat']
 
 templates = {tn: Template(open('templates' + os.sep + tn + '.tmpl').read()) for tn in template_names}
@@ -195,6 +202,9 @@ real_posts_count = len(posts)
 pics_to_download = list()
 inline_pic_pattern = re.compile(r'<img.*?src="(.*?)".*?\/>')
 
+if reverse_posts:
+    posts = list(reversed(posts))
+
 posts += [{'type':'pass'}] * (chapter_size - (len(posts) % chapter_size) + 1)
 ids_for_spine = list()
 
@@ -217,9 +227,15 @@ for i, post in enumerate(posts):
         post['picscount'] = '{} picture'.format(len(post['photos']))
         if len(post['photos']) > 1: post['picscount'] += 's'
 
+    if post['type'] == 'chat':
+        dialogue = ''
+        for phrase in post['dialogue']:
+            dialogue += templates['chatphrase'].substitute(**phrase)
+        post['body'] = dialogue
+
     if post['type'] == 'answer':
         if post['summary'] is None:
-            post['summary'] = '&mdash;'
+            post['summary'] = 'Answer post'
         if download_inline_images:
             if '<img' in post['answer']:
                 for url in inline_pic_pattern.findall(post['answer']):
@@ -236,7 +252,7 @@ for i, post in enumerate(posts):
     if not post['type'] == 'pass':
         post['postnumber'] = str(i + 1)
         if 'title' in post.keys() and post['title'] is None:
-            post['title'] = '&mdash;'
+            post['title'] = '{} post'.format(post['type'].capitalize())
         post['header'] = templates['header'].substitute(**post)
         processed_post = templates[post['type']].substitute(**post)
 
@@ -276,7 +292,7 @@ if download_inline_images:
 
 
 
-book.toc = (epub.Link('intro.xhtml', 'Introduction', 'intro'), )
+book.toc = (epub.Link('intro.xhtml', 'General info', 'intro'), )
 book.toc += tuple(epub.Link(
     'chap_{:04d}.xhtml'.format(n),
     '{} - {}'.format(n * chapter_size + 1, (n + 1) * chapter_size),
@@ -299,15 +315,18 @@ book.add_item(epub.EpubNav())
 bookname = info['name'] + '.epub'
 epub.write_epub(bookname, book, {})
 
-
+time.sleep(1)
 
 if download_images or download_inline_images:
     if compress_images_too:
         # dirty hack
+        if os.path.exists('EPUB'):
+            print('Removing old EPUB folder')
+            shutil.rmtree('EPUB', ignore_errors=True)
         os.mkdir('EPUB')
         shutil.copytree(pdirname, 'EPUB/images')
         os.system('7z a -tzip {0} EPUB/images/*'''.format(bookname, pdirname))
-        shutil.rmtree('EPUB')
+        shutil.rmtree('EPUB', ignore_errors=True)
         if os.path.exists(bookname + '.tmp'):
             shutil.move(bookname + '.tmp', bookname)
     else:
