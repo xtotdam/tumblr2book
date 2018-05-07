@@ -312,7 +312,7 @@ if download_inline_images:
     while pics_to_download:
         pool.map(fetch_inline_pic, pics_to_download)
         pics_to_download = timeoutted_pics[:]
-        timeoutted_pics = []
+        timeoutted_pics = list()
         if pics_to_download:
             print('\nClaiming' + str(len(pics_to_download)) + 'timeoutted pics again')
 
@@ -358,4 +358,4 @@ if download_images or download_inline_images:
         if os.path.exists(bookname + '.tmp'):
             shutil.move(bookname + '.tmp', bookname)
     else:
-        print('Rename {} into images/ and put it into {}/EPUB/images. I warned you:)'.format(pdirname, bookname))
+        print('Now open {} as a zip archive and put {} inside. I warned you:)'.format(bookname, pdirname))
