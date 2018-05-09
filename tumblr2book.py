@@ -25,9 +25,9 @@ from secret import tumblr_api_key
 client = pytumblr.TumblrRestClient(tumblr_api_key)
 
 parser = argparse.ArgumentParser(description='Assemble Tumblr blog into epub book. By default we don\'t download any images.')
-parser.add_argument('-p', action='store_true', help='download photos')
-parser.add_argument('-i', action='store_true', help='download inline photos. Will not work without -p')
-parser.add_argument('-r', action='store_true', help='reverse order of posts. Default is from new to old (like Tumblr itself)')
+parser.add_argument('-p', '--photos', dest='p', action='store_true', help='download photos')
+parser.add_argument('-i', '--inlines', dest='i', action='store_true', help='download inline photos. Will not work without -p')
+parser.add_argument('-r', '--reverse', dest='r', action='store_true', help='reverse order of posts. Default is from new to old (like Tumblr itself)')
 parser.add_argument('blog_name', metavar='BLOG_NAME', help='Tumblr blog name - what is before \'.tumblr.com\'')
 args = parser.parse_args()
 
